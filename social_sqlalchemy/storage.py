@@ -67,7 +67,7 @@ class SQLAlchemyMixin:
     @classmethod
     def _save_instance(cls, instance):
         cls._session().add(instance)
-        if cls.COMMIT_SESSION:
+        if 1 or cls.COMMIT_SESSION:
             cls._session().commit()
             cls._session().flush()
         else:
@@ -174,12 +174,11 @@ class SQLAlchemyUserMixin(SQLAlchemyMixin, UserMixin):
     def get_social_auth(cls, provider, uid):
         if not isinstance(uid, str):
             uid = str(uid)
-        try:
-            return cls._session().scalar(
-                cls._query().filter_by(provider=provider, uid=uid)
-            )
-        except IndexError:
-            return None
+        return (
+            cls._session()
+            .execute(cls._query().filter_by(provider=provider, uid=uid))
+            .first()
+        )
 
     @classmethod
     def get_social_auth_for_user(cls, user, provider=None, id=None):
@@ -233,14 +232,17 @@ class SQLAlchemyAssociationMixin(SQLAlchemyMixin, AssociationMixin):
     @classmethod
     def store(cls, server_url, association):
         # Don't use get_or_create because issued cannot be null
-        try:
-            assoc = cls._session().scalar(  # fix: skip
+        assoc = (
+            cls._session()
+            .execute(  # fix: skip
                 cls._query().filter_by(
                     server_url=server_url,  # fix: skip
                     handle=association.handle,  # fix: skip
                 )
             )
-        except IndexError:
+            .first()
+        )
+        if assoc is None:
             assoc = cls(server_url=server_url, handle=association.handle)
         assoc.secret = base64.encodebytes(association.secret).decode()
         assoc.issued = association.issued
@@ -250,14 +252,16 @@ class SQLAlchemyAssociationMixin(SQLAlchemyMixin, AssociationMixin):
 
     @classmethod
     def get(cls, *args, **kwargs):
-        return cls._session().scalar(cls._query().filter_by(*args, **kwargs))
+        return [
+            cls._session().execute(cls._query().filter_by(*args, **kwargs)).scalar()
+        ]
 
     @classmethod
     def remove(cls, ids_to_delete):
         cls._session().execute(
-            delete(
-                cls._query().where(cls.id.in_(ids_to_delete))  # fix: skip
-            ).execution_options(synchronize_session="fetch")
+            delete(cls.__table__)
+            .where(cls.__table__.c.id.in_(ids_to_delete))
+            .execution_options(synchronize_session="fetch")
         )
 
 
