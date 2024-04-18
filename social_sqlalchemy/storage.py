@@ -1,28 +1,28 @@
 """SQLAlchemy models for Social Auth"""
 import base64
-import six
 import json
+
+import six
 
 try:
     import transaction
 except ImportError:
     transaction = None
 
+from social_core.storage import (
+    AssociationMixin,
+    BaseStorage,
+    CodeMixin,
+    NonceMixin,
+    PartialMixin,
+    UserMixin,
+)
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.types import PickleType, Text
-from sqlalchemy.schema import UniqueConstraint
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.ext.mutable import MutableDict
-
-from social_core.storage import (
-    UserMixin,
-    AssociationMixin,
-    NonceMixin,
-    CodeMixin,
-    PartialMixin,
-    BaseStorage,
-)
+from sqlalchemy.schema import UniqueConstraint
+from sqlalchemy.types import PickleType, Text
 
 
 class JSONPickler(object):
@@ -129,7 +129,7 @@ class SQLAlchemyUserMixin(SQLAlchemyMixin, UserMixin):
     @classmethod
     def disconnect(cls, entry):
         cls._session().delete(entry)
-        cls._flush()
+        cls._session().commit()
 
     @classmethod
     def user_query(cls):
@@ -236,6 +236,7 @@ class SQLAlchemyAssociationMixin(SQLAlchemyMixin, AssociationMixin):
         cls._query().filter(cls.id.in_(ids_to_delete)).delete(
             synchronize_session="fetch"
         )
+        cls._session().commit()
 
 
 class SQLAlchemyCodeMixin(SQLAlchemyMixin, CodeMixin):
@@ -267,6 +268,7 @@ class SQLAlchemyPartialMixin(SQLAlchemyMixin, PartialMixin):
         partial = cls.load(token)
         if partial:
             cls._session().delete(partial)
+            cls._session().commit()
 
 
 class BaseSQLAlchemyStorage(BaseStorage):
